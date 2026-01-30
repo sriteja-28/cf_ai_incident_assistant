@@ -3,7 +3,7 @@
 ## Phase 1: Initial Persona
 **Prompt:** > "You are an incident analysis assistant. Your goal is structured reasoning."
 
-**Goal:** Establish a professional, technical persona that avoids conversational filler and focuses on SRE (Site Reliability Engineering) principles.
+**Goal:** Establish a professional, technical persona that focuses on SRE principles.
 
 ## Phase 2: Structural Refinement
 **Prompt:**
@@ -13,7 +13,7 @@
 > 2. Immediate Mitigation Steps
 > 3. Long-term Prevention Suggestions."
 
-**Reasoning:** Added explicit constraints to improve **deterministic output**. This ensures the UI can reliably parse or display the assistant's findings in a consistent format for the user.
+**Reasoning:** Added explicit constraints to improve **deterministic output**. This ensures the UI can reliably parse or display the assistant's findings in a consistent format.
 
 ## Phase 3: State-Aware Reasoning
 **Context:** Integrated via Cloudflare Durable Objects.
