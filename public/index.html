@@ -1,32 +1,122 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
-	</head>
-	<body>
-		<h1 id="heading"></h1>
-		<p>This page comes from a static asset stored at `public/index.html` as configured in `wrangler.jsonc`.</p>
-		<button id="button" type="button">Fetch a random UUID</button>
-		<output id="random" for="button"></output>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SRE Incident Assistant | Cloudflare</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root { --bg: #0b0f1a; --card: #161b22; --text: #e6edf3; --accent: #58a6ff; --danger: #f85149; --success: #3fb950; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* Header bar */
+        header { background: #161b22; padding: 1rem 2rem; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
 
-			const button = document.getElementById("button");
-			button.addEventListener("click", () => {
-				fetch('/random')
-					.then((resp) => resp.text())
-					.then((text) => {
-						const random = document.getElementById('random');
-						random.textContent = text;
-					});
-			});
-		</script>
-	</body>
+        .container { flex: 1; display: flex; flex-direction: column; max-width: 1000px; margin: 0 auto; width: 100%; padding: 20px; box-sizing: border-box; overflow: hidden; }
+        
+        #chat { flex: 1; overflow-y: auto; background: var(--card); border-radius: 12px; border: 1px solid #30363d; padding: 20px; margin-bottom: 20px; scroll-behavior: smooth; }
+        
+        .message { margin-bottom: 24px; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .label { font-size: 0.75rem; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; display: block; letter-spacing: 0.05em; }
+        .user .label { color: var(--accent); }
+        .ai .label { color: #8b949e; }
+        
+        .bubble { padding: 12px 16px; border-radius: 6px; line-height: 1.6; }
+        .user .bubble { background: #1f2937; border: 1px solid #30363d; }
+        .ai .bubble { background: transparent; border-left: 2px solid var(--accent); }
+        
+        /* Markdown Styling */
+        .bubble h1, .bubble h2 { font-size: 1.1rem; margin-top: 0; color: var(--accent); }
+        .bubble code { background: #2d333b; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+        
+        .input-wrapper { display: flex; gap: 12px; background: #161b22; padding: 16px; border-radius: 12px; border: 1px solid #30363d; }
+        input { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1rem; }
+        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .loading { display: none; font-size: 0.8rem; color: #8b949e; margin-bottom: 10px; font-style: italic; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="status-dot"></div>
+        <span style="font-weight: 600; letter-spacing: 1px;">INCIDENT_ASSISTANT_V1</span>
+    </header>
+
+    <div class="container">
+        <div id="chat">
+            <div class="message ai">
+                <span class="label">System Initialized</span>
+                <div class="bubble">Ready for incident triage. Please provide logs or a description of the failure.</div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">Analyzing telemetry and generating report...</div>
+
+        <div class="input-wrapper">
+            <input type="text" id="prompt" placeholder="Describe the service interruption..." onkeypress="if(event.key==='Enter') sendPrompt()">
+            <button id="sendBtn" onclick="sendPrompt()">Run Analysis</button>
+        </div>
+    </div>
+
+    <script>
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('prompt');
+        const btn = document.getElementById('sendBtn');
+        const loading = document.getElementById('loading');
+
+        async function sendPrompt() {
+            const text = input.value.trim();
+            if(!text || btn.disabled) return;
+
+            // UI Update: User Message
+            chat.innerHTML += `
+                <div class="message user">
+                    <span class="label">Engineer Input</span>
+                    <div class="bubble">${text}</div>
+                </div>`;
+            
+            input.value = '';
+            btn.disabled = true;
+            loading.style.display = 'block';
+            chat.scrollTop = chat.scrollHeight;
+
+            try {
+                // We hit /message for the AI logic
+                const res = await fetch('/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: text })
+                });
+                
+                const data = await res.json();
+                const content = data.error ? `**Error:** ${data.error}` : data.response;
+
+                // UI Update: AI Response (rendered via Marked)
+                chat.innerHTML += `
+                    <div class="message ai">
+                        <span class="label">Incident Analysis</span>
+                        <div class="bubble">${marked.parse(content)}</div>
+                    </div>`;
+
+                // Optional: Save to Durable Object memory in background
+                fetch('/conversation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+
+            } catch (err) {
+                chat.innerHTML += `<div class="message" style="color:var(--danger)">Connection to Edge Worker lost.</div>`;
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+                chat.scrollTop = chat.scrollHeight;
+            }
+        }
+    </script>
+</body>
 </html>
